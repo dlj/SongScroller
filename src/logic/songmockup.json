@@ -1,0 +1,6 @@
+    { "data" : [
+    {  "id" : 1, "title" : "Hurt", "artist" : "Nine Inch Nails" }, 
+    { "id" : 2, "title" : "I en lille båd som gynger", "artist" : "Bamse"},
+    { "id" : 3, "title" : "Don't you forget about me", "artist": "Simple Minds" }
+  ]
+}

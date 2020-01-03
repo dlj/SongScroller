@@ -1,7 +1,7 @@
 <template>
 <div id="navigation">
     <div id="menuBar"> <a href="#" v-on:click="back()" v-if="currentPage === 'Scroller'"> ⬅️ </a> </div>
-    <component :is="currentPage" @SongListSongSelected="songSelected" :SongId="currentSongId">  </component>
+    <component class="content" :is="currentPage" @SongListSongSelected="songSelected" :SongId="currentSongId">  </component>
     </div>
 </template>
 
@@ -36,16 +36,21 @@ export default class Navigation extends Vue {
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped lang="scss">
 #navigation {
-  height:100%;
+  flex-grow: 1;
+  display: flex;
+  flex-direction :column;
+  align-content:center;
+}
+.content {
+ flex-grow: 1;
 }
 #menuBar {
   background: #163f46;
   padding:10px;
   height:$MenuBarHeight;
   text-align: left;
-
 }
-#menuBar a{
+#menuBar a {
   font-size: 26px;
 }
 </style>

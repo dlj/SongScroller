@@ -1,104 +1,193 @@
 <template>
-  <div v-on:click="funky()" id="Scollercontainer">
-    <EditSong></EditSong>
-    <span id="songsettings">✍🏻</span>
-    <span id="songtiming">⏱️</span>    
-    <div class="ThirdLine ScrollerLine" :v-bind="Song">{{Song.lyric[currentLine-4]}} <br /></div>
-    <div class="ThirdLine ScrollerLine" :v-bind="Song">{{Song.lyric[currentLine-3]}} <br /></div>
-    <div class="SecondLine ScrollerLine" :v-bind="Song">{{Song.lyric[currentLine-2]}} <br /></div>
-    <div class="SecondLine ScrollerLine" :v-bind="Song">{{Song.lyric[currentLine-1]}} <br /></div>
-    <div class="MiddleLine ScrollerLine" :v-bind="Song">{{Song.lyric[currentLine]}} </div>
-    <div class="MiddleLine ScrollerLine" :v-bind="Song">{{Song.lyric[currentLine+1]}} </div>
-    <div class="SecondLine ScrollerLine" :v-bind="Song">{{Song.lyric[currentLine+2]}} <br /></div>
-    <div class="SecondLine ScrollerLine" :v-bind="Song">{{Song.lyric[currentLine+3]}} <br /></div>
-    <div class="ThirdLine ScrollerLine" :v-bind="Song">{{Song.lyric[currentLine+4]}} <br /></div>
-    <div class="ThirdLine ScrollerLine" :v-bind="Song">{{Song.lyric[currentLine+5]}} <br /></div>
+  <div id="Scollercontainer">  
+    <ControlButtons @playbackState="playbackChanged"/>
+    <EditSong id="editSong" :SongId="SongId" v-if="editMode" />    
+    <span id="songtimingedit" @click="TimingMode = !TimingMode" v-if="!editMode">⏲️</span>
+    <span id="songtiming" @click="ShowTiming = !ShowTiming" v-if="!editMode"><div id="songtimingedithand">⚙️</div>⏱️</span>  
+    <span id="songsettings" @click="editMode = !editMode" v-if="!editMode">✍🏻</span>
+    <div  @click="timerMark" v-if="!editMode">     
+      <ul id="ScrollerList">
+          <template v-for="(item, index) in something()">
+              <li v-bind:key="index" >    
+                <div>
+                  <div :class="'Line' + item.index" class="ScrollerLine">{{item.lyric}} <br /></div>
+                  <input v-if="item.timing !== undefined && ShowTiming === true" :value=item.timing />
+                </div>
+            </li>      
+        </template>
+      </ul>
+    </div>
   </div>
 </template>
 
 <script lang="ts">
 import { Component, Prop, Vue, Watch } from 'vue-property-decorator';
-import { songlyric } from '../types/songlyric'
-import  EditSong from "./EditSong.vue";
+import { songlyric } from "@objects/songlyric"
+import state from "../objects/state"
+
+import  EditSong from "./EditSong.vue"
+import ControlButtons from "./ControlButtons.vue"
+import { GetSong, GetSongLyric } from "../logic/loader"
+import { VNode, CreateElement } from 'vue';
+import EventBus from '../logic/eventbus'
+
+class tmpLyric
+{
+  lyric! : string;
+  timing? : number;
+  index! : number;
+}
+
 
 @Component({
     components: {    
-      EditSong
+      EditSong,
+      ControlButtons
       }
 
 })
 export default class Scroller extends Vue {
-@Prop() SongId! : number;
-private Song : songlyric = { id : 0, songid : 0, lyric : []};
+private lineOffset : number = 5; 
+private Song : songlyric = { id : 0, songid : 0, lyric : [], timing :[]};
+private lastTimerMark : number = 0;
 
+@Prop() SongId! : number;
 @Watch('SongId', {immediate : true})
 onSongIdChanged(value: number, oldValue : number) {  
-  this.Song = this.loadSong(value);
-}
-private interval : any;
-private tmpData : songlyric[] = [
-  { id : 1, songid : 1, lyric : 
-    [  
-        "I hurt myself today",
-        "   G     D         ",
-    "To see if i still feel",
-    "Focus on the pain",
-    "The only thing thats real",
-    "The needel tears a hole",
-    "The old familiar sting",
-    "Try to kill it all away",
-    "But I remember everything",
-      "I hurt myself today",
-    "To see if i still feel", 
-    "Focus on the pain",
-    "The only thing thats real",
-    "The needel tears a hole",
-    "The old familiar sting",
-    "Try to kill it all away",
-    "But I remember everything"] },
-    {id : 2, songid : 2, lyric : 
-      ["I en lille båd der gynger", "sidder jeg og synger",
-  "Synger om de ting", "der gi'r livet værdi",
-  "Jeg kan ikke gå på vandet", "men jeg kan så meget andet",
-  "Jeg kan føle mig glad", "jeg kan føle mig fri",
-  "Der er forår i min mave.", "Jeg ved, hvad jeg vil lave",
-  "Ud at finde fred", "fri for nogen der glor",
-  "Drive rundt ude på fjorden","med begge ben på jorden",
-  "Jeg er godt tilfreds med en pilsner i snor",
-  "I en lille båd der gynger", "sidder jeg og synger",
-  "Synger om de ting", "der gi'r livet værdi",
-  "Jeg kan ikke gå på vandet","men jeg kan så meget andet",
-  "Jeg kan føle mig glad","jeg kan føle mig fri"] }
-];
-  currentLine : number = 0;
-
-funky() : void {
-  this.startScrolling();
+  this.loadSong(value);  
 }
 
-startScrolling()
+private editMode : boolean = false;
+@Watch('editMode', {immediate : true})
+oneditModeChanged(value: boolean, oldValue : boolean) {  
+  
+}
+
+private ShowTiming : boolean = false;
+@Watch('ShowTiming', {immediate : true})
+onShowTimingChanged(value: boolean, oldValue : boolean) {  
+
+}
+
+private TimingMode : boolean = false;
+@Watch('TimingMode', {immediate : true})
+onTimingModeChanged(value: boolean, oldValue : boolean) {  
+  if (value == true) {
+    this.startTiming();
+  }
+}
+
+private Playing : boolean = false;
+@Watch('Playing', {immediate : true})
+onPlayingChanged(value: boolean, oldValue : boolean) {  
+  this.currentLine = 0;
+  if (value == true) {
+    this.startScrolling();
+  }
+}
+currentLine : number = 0;
+
+playbackChanged(newState : state) : void {
+
+switch(newState)
 {
-  if (this.interval !== undefined)
+  case state.stopped : this.Playing = false;
+  break;
+  case state.playing : this.Playing = true;
+  break;
+  default: 
+  break;
+}
+
+      // eslint-disable-next-line no-console
+    console.log(newState);
+}
+something() : Array<tmpLyric>
+{
+  var rtn = Array<tmpLyric>();
+  // *2 as two lines are handled at the same time
+  var startPosition = this.currentLine;// - this.lineOffset * 2;
+  var endPosition = this.currentLine + this.lineOffset * 2;
+
+  // Only start from a positive line number
+  // Easier to read than inline if
+  if (this.ShowTiming || startPosition < 0) {
+    startPosition = 0;
+  }
+
+  
+  if (this.ShowTiming || endPosition > this.Song.lyric.length) {
+    endPosition = this.Song.lyric.length;
+  }
+  
+  // Update method should take care of the uneven number of rows
+  for (var i = startPosition, y = 0; i <= endPosition; i = i + 2, y++)
   {
-    clearInterval(this.interval);
-    this.currentLine = 0;
+    // Line 4 is the lowest one, so cap it with Matn.min.
+    var line =  this.ShowTiming ? (i === this.currentLine ? 0 : 2) : Math.min(Math.abs(i - this.currentLine),4);
+
+    rtn.push({ lyric : this.Song.lyric[i], timing : this.Song.timing[y], index : line});
+    rtn.push({ lyric : this.Song.lyric[i + 1], index : line});
+  }
+  return rtn;
+}
+
+startTiming() : void 
+{
+  // Reset
+  this.ShowTiming = false;
+  this.Song.timing = [];
+  this.lastTimerMark = new Date().getTime();
+}
+
+timerMark() : void
+{
+  if (!this.TimingMode) {
     return;
   }
 
-    // eslint-disable-next-line no-console
-    console.log("Start Scrolling");
-  this.interval = setInterval(() => {  this.currentLine = this.currentLine+2 }, 2500);
+  // Mark current time and get the difference.
+  let currentTime = new Date().getTime();
+  let between = currentTime - this.lastTimerMark;
+  this.lastTimerMark = currentTime;
+
+  this.Song.timing.push(between);    
+  this.currentLine = this.currentLine + 2;
+
+  if (this.currentLine >= this.Song.lyric.length) {
+    // Reset
+    this.TimingMode = false;
+    this.ShowTiming = true;
+    this.currentLine = 0;
+  }
+
+  //Save in some way or another
+
 }
 
-loadSong(id : number) : songlyric {
-  
-  for (let sl of this.tmpData)
-  {
-    if (sl.id == id) {
-        return sl;
-    }
+startScrolling() : void
+{
+  if (this.Playing === false) {
+    return;
   }
-  return { id : 0, songid : 0, lyric : []} as songlyric;
+
+  this.currentLine = this.currentLine + 2; 
+  let nextTimeout = Math.floor(this.currentLine / 2);
+  
+  // Stop if we run out of timing
+  if (this.Song.timing.length < nextTimeout) {
+    this.Playing = false;
+    return;
+  }
+
+  setTimeout(() => {  
+    this.startScrolling(); },     
+    this.Song.timing[nextTimeout]);
+}
+
+loadSong(id : number) : void {  
+  GetSongLyric(this.SongId).then(x => {  this.Song = x;
+   });
 }
 }
 </script>
@@ -110,12 +199,32 @@ loadSong(id : number) : songlyric {
 
 #Scollercontainer
 {
-  height:100%;
   display: flex;
+  flex: 1 0 auto;
   align-items: center;
   justify-content: center;
   flex-direction: column;
- 
+
+  flex-flow: row wrap; 
+}
+
+#ScrollerList
+{
+  list-style: none;
+  padding:0px;
+}
+
+#ScrollerList li div
+{
+  align-items: center;
+  justify-content: center;
+  display: flex;  
+}
+
+#ScrollerList li input
+{
+  height: 24px;
+  width: 75px;
 }
 
 .ScrollerLine
@@ -125,19 +234,19 @@ loadSong(id : number) : songlyric {
   font-family: 'Courier New', Courier, monospace
 }
 
-.MiddleLine {
-  font-size: 30px;
+.Line0 {
+  font-size: 20px;
   background-color: $backgroundHighLight;
 }
-.SecondLine
+.Line2
 {
   font-size: 20px;
-  opacity: 40%;
+  opacity: 50%;
   background-color: lighten($backgroundHighLight, 2);
 }
-.ThirdLine
+.Line4
 {
- font-size: 15px;
+ font-size: 20px;
  opacity: 20%;
 }
 
@@ -145,12 +254,13 @@ loadSong(id : number) : songlyric {
   opacity: 10%;
   font-size: 64px;
   position: absolute;
-  top:$MenuBarHeight + 64px;
+  top: 0px;
   right:64px;
 }
 #songsettings:hover {
   opacity: 50%;  
 }
+
 #songtiming {
   opacity: 10%;
   font-size: 64px;
@@ -160,5 +270,27 @@ loadSong(id : number) : songlyric {
 }
 #songtiming:hover {
   opacity: 50%;  
+}
+
+#songtimingedithand {
+  position: absolute;
+  font-size: 32px;
+  bottom: 0;
+  right: 0;
+}
+
+#songtimingedit {
+  opacity: 10%;
+  font-size: 64px;
+  position: absolute;
+  top:$MenuBarHeight + 64px;
+  right:230px;
+}
+#songtimingedit:hover {
+  opacity: 50%;  
+}
+
+#editSong {
+  width:100%;
 }
 </style>

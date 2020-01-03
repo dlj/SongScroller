@@ -10,14 +10,20 @@
 
 <script lang="ts">
 import { Component, Prop, Vue } from 'vue-property-decorator';
-import { song } from "../types/song"
+import { GetSongNames } from "../logic/loader"
+import { song } from "@objects/song"
 @Component
 export default class SongList extends Vue {
+private songs : Array<song> = new Array<song>();
 
-get songs() : song[]
-{
-  return [{ id : 1, artist : "Nine Inch Nails", title : "Hurt"  } as song, {  id :2 , artist :  "Bamse", title: "I en lille båd der gynger"} as song];
+mounted () {
+  this.getSongs();
 }
+getSongs() : void
+{ 
+  GetSongNames().then(x => this.songs = x);
+}
+
     itemClicked (id : number) : void {
       this.$emit("SongListSongSelected", id);
     }
